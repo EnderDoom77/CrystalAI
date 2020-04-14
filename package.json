@@ -1,0 +1,15 @@
+{
+  "name": "alpha-english",
+  "version": "1.0.0",
+  "description": "A Discord bot on Linguistics of the English Language",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Ender",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^12.1.1",
+    "mysql": "^2.18.1"
+  }
+}
