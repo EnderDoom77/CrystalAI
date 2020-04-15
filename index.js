@@ -2,10 +2,12 @@
 
 const Discord = require('discord.js');
 const bot = new Discord.Client;
+const io = require('fs');
+const privData = require("./Data/hidden.json")
 
 const MySQL = require('mysql');
 
-const token = "Njk5MjMzMzU5NTc4MjY3NzM5.XpRgoQ.5-LiZ1dXXaSoaDZArp0piKqfqmo";
+const token = privData["token"];
 const link = "https://discordapp.com/api/oauth2/authorize?client_id=699233359578267739&permissions=1546775638&scope=bot"
 let prefix = ':';
 
