@@ -18,7 +18,7 @@ bot.on('ready', () => {
 const MESSAGEHELP = new Discord.MessageEmbed()
     .setTitle("Command List for Crystal AI")
     .addField("Basic commands", "help => Will show this message \nhelp [command] => Will show how to use a specific command \nhelloworld => Hi! \ninvite => Will show you how to add me to your server! ^w^")
-    .addField("Fun commands", "roll [dice] => Will roll some dice! use help roll for more info.\nmath [operation] => Will solve an arithmetic calculation.")
+    .addField("Fun commands", "roll [dice] => Will roll some dice! use help roll for more info.\nmath [operation] => Will solve an arithmetic calculation.\ncheck [action] [options] => Will make an ability check!")
     .addField("Moderation commands", "cleanse (n) => Will bulk delete n messages")
     .addField("Config commands", "setprefix [prefix] => Will set the prefix \ntoggleprefixcasesensitive => Will toggle whether any case is accepted for the prefix")
     .setColor("0xAA33FF");
@@ -54,6 +54,8 @@ bot.on('message', msg => {
         }
     }
 
+    let finishedOptions = false;
+
     switch(args[0].toLowerCase())
     {
         case 'help':
@@ -73,7 +75,7 @@ bot.on('message', msg => {
                         msg.channel.send("Use this command to invite me to your server! ^w^");
                         break;
                     case 'cleanse':
-                        msg.channel.send("Syntax: [prefix]cleanse [number] Use: I will delete that many messages!")
+                        msg.channel.send("Syntax: [prefix]cleanse [number]. Use: I will delete that many messages!")
                         break;
                     case 'roll':
                         const embedRoll = new Discord.MessageEmbed().setTitle(`${prefix}roll [n]d[D] ([+ or -] [mod])`)
@@ -97,6 +99,24 @@ bot.on('message', msg => {
                         .setColor("0xAA33FF");
 
                         msg.channel.send(embedMath);
+                        break;
+                    case 'helloworld':
+                        msg.channel.send("Use this command to get me to greet you, floofs~");
+                        break;
+                    case 'setprefix':
+                        msg.channel.send("Syntax: [prefix]setprefix [newPrefix]. Use: I'll change my at-attention prefix!")
+                        break;
+                    case 'toggleprefixcasesensitive':
+                    case 'toggleprefixacceptcaps':
+                        msg.channel.send("Use this command to get me to ignore case in the prefix.\nAliases: toggleprefixcasesensitive, toggleprefixacceptcaps")
+                        break;
+                    case 'check':
+                        const embedCheck = new Discord.MessageEmbed().setTitle(`${prefix}check [action] ([options])`)
+                        .addField("Usage", "It will roll a d20 and check how well you do at a given action.")
+                        .addField("Options", "-adv or --advantage and -disadv or --disadvantage : will roll with their respective advantage type.\n-c or --compact : won't show dice rolls explicitly\n-mod[math expression] : will set the modifier to the final roll.\n-col[color code] : will set the embed color (e.g. -col#FF00FF | -colFF00FF | -col0xFF00FF for cyan)")
+                        .setColor("0xAA33FF");
+
+                        msg.channel.send(embedCheck);
                         break;
                     default:
                         msg.channel.send(`Sorry! I couldn't find command: "${args[1]}" >~<`);
@@ -136,19 +156,40 @@ bot.on('message', msg => {
         case 'check': //:check [SOME ACTION] [OPTIONS] ==> -mod+3 -adv -disadv
             args.shift();
 
-            let finishedOptions = false;
+            finishedOptions = false;
             let advantage = 0;
             let mod = 0;
+            let color = "0xFFFF00";
+            let compact = false;
 
             try{
                 while(!finishedOptions)
                 {
                     finishedOptions = true;
+                    console.log(`Checking config options for ${args}`);
 
-                    if(StartsWith(args[args.length - 1]), "-mod") 
+                    if(StartsWith(args[args.length - 1], "-mod")) 
                     {
-                        mod = mathevalStart(args[args.length - 1].substring("-mod".length));
+                        mod = MathEvalStart(args[args.length - 1].substring("-mod".length));
                         if(isNaN(mod)) msg.reply(`The modifier you used (${args[args.length - 1].substring("-mod".length)}) can't be evaluated! ${mod}`).then(msg => (msg.delete(6000)))
+                        finishedOptions = false;
+                        args.pop();
+                    }
+                    else if(StartsWith(args[args.length - 1], "-col")) 
+                    {
+                        color = args[args.length - 1].substring("-col".length);
+                        if(StartsWith(color, "#"))
+                        {
+                            color = color.substring(1);
+                        }
+                        if(!StartsWith(color, "0x")) 
+                        {
+                            color = "0x" + color;
+                        }
+                        if(color.length != 8)
+                        {
+                            msg.reply(`The color you used (${args[args.length - 1].substring("-col".length)}) doesn't use a correct colour format! Try -col#FFFFFF | -colFFFFFF | -col0xFFFFFF`).then(msg => (msg.delete(6000)))
+                        }
                         finishedOptions = false;
                         args.pop();
                     }
@@ -158,11 +199,19 @@ bot.on('message', msg => {
                         case "--advantage":
                             advantage = 1;
                             finishedOptions = false;
+                            args.pop();
                             break;
                         case "-disadv":
                         case "--disadvantage":
                             advantage = -1;
                             finishedOptions = false;
+                            args.pop();
+                            break;
+                        case "-c":
+                        case "--compact":
+                            compact = true;
+                            finishedOptions = false;
+                            args.pop();
                             break;
                     }
                 }
@@ -178,8 +227,8 @@ bot.on('message', msg => {
                 break;
             }
 
-            msg.channel.send()
-
+            console.log(`Working on it! Ability check with adv ${advantage}, mod ${mod}, col ${color}, and action ${ClumpArray(args)}`)
+            msg.channel.send(AbilityCheckEmbed(ClumpArray(args, " "), mod, advantage, color, compact, msg.member))
             break;
         case 'setprefix':
             if(!msg.member.permissions.has(32))
@@ -213,7 +262,7 @@ bot.on('message', msg => {
         case 'calc':
             args.shift();
 
-            let finishedOptions = false;
+            finishedOptions = false;
             let verbose = false;
 
             while(!finishedOptions)
@@ -234,7 +283,7 @@ bot.on('message', msg => {
                 break;
             }
 
-            msg.channel.send(math(ClumpArray(args, ""), verbose));
+            msg.channel.send(DoMath(ClumpArray(args), verbose));
             break;
     }
 })
@@ -398,7 +447,7 @@ function RollDiceSilent(n, d)
     return value;
 }
 
-function ClumpArray(array, separator)
+function ClumpArray(array, separator = "")
 {
     let output = "";
     
@@ -447,10 +496,10 @@ function ContainsAt(string, substring, position)
 }
 
 let traceback = "";
-function math(input, includeTraceback = true)
+function DoMath(input, includeTraceback = true)
 {
     traceback = "";
-    let output = mathevalStart(input);
+    let output = MathEvalStart(input);
     let outputSimp = Math.round(output * 10000) / 10000;
     let embed = new Discord.MessageEmbed();
 
@@ -465,7 +514,7 @@ function math(input, includeTraceback = true)
     return embed;
 }
 
-function mathevalStart(input)
+function MathEvalStart(input)
 {
     input = input.toLowerCase();
     newInput = "";
@@ -506,10 +555,10 @@ function mathevalStart(input)
         }
     }
 
-    return matheval(newInput);
+    return MathEval(newInput);
 }
 
-function matheval(input, basePos = 0)
+function MathEval(input, basePos = 0)
 {
     const pi = Math.PI;
     const e = Math.E;
@@ -558,7 +607,7 @@ function matheval(input, basePos = 0)
 
                     for(let i = 0; i < args.length; i++)
                     {
-                        final.push(matheval(args[i], basePos + ch + intCh));
+                        final.push(MathEval(args[i], basePos + ch + intCh));
                         intCh += args[i].length + ",".length;
                     }
                     
@@ -567,7 +616,7 @@ function matheval(input, basePos = 0)
                 }
                 else
                 {
-                a = matheval(content, pos + basePos + 1);
+                a = MathEval(content, pos + basePos + 1);
                 
                 if(StartsWith(a, "ERROR"))
                 {
@@ -585,8 +634,8 @@ function matheval(input, basePos = 0)
     {
         if(input[ch] == "+" || input[ch] == "―")
         {
-            a = matheval(input.substring(0, ch), basePos);
-            b = matheval(input.substring(ch + 1), basePos + ch + 1);
+            a = MathEval(input.substring(0, ch), basePos);
+            b = MathEval(input.substring(ch + 1), basePos + ch + 1);
 
             if(StartsWith(a, "ERROR: Empty"))
             {
@@ -614,8 +663,8 @@ function matheval(input, basePos = 0)
     {
         if(input[ch] == "*" || input[ch] == "/")
         {
-            a = matheval(input.substring(0, ch), basePos);
-            b = matheval(input.substring(ch + 1), basePos + ch + 1);
+            a = MathEval(input.substring(0, ch), basePos);
+            b = MathEval(input.substring(ch + 1), basePos + ch + 1);
 
             if(StartsWith(a, "ERROR:"))
             {
@@ -639,8 +688,8 @@ function matheval(input, basePos = 0)
     {
         if(input[ch] == "^")
         {
-            a = matheval(input.substring(0, ch), basePos);
-            b = matheval(input.substring(ch + 1), basePos + ch + 1);
+            a = MathEval(input.substring(0, ch), basePos);
+            b = MathEval(input.substring(ch + 1), basePos + ch + 1);
 
             if(StartsWith(a, "ERROR:"))
             {
@@ -664,8 +713,8 @@ function matheval(input, basePos = 0)
     {
         if(input[ch] == "%")
         {
-            a = matheval(input.substring(0, ch), basePos);
-            b = matheval(input.substring(ch + 1), basePos + ch + 1);
+            a = MathEval(input.substring(0, ch), basePos);
+            b = MathEval(input.substring(ch + 1), basePos + ch + 1);
 
             if(StartsWith(a, "ERROR:"))
             {
@@ -687,8 +736,8 @@ function matheval(input, basePos = 0)
     {
         if(input[ch] == "d")
         {
-            a = matheval(input.substring(0, ch), basePos);
-            b = matheval(input.substring(ch + 1), basePos + ch + 1);
+            a = MathEval(input.substring(0, ch), basePos);
+            b = MathEval(input.substring(ch + 1), basePos + ch + 1);
 
             if(StartsWith(a, "ERROR: Empty"))
             {
@@ -720,8 +769,8 @@ function matheval(input, basePos = 0)
         {
             if(ContainsAt(input, functions[func], ch))
             {
-                a = matheval(input.substring(0, ch), basePos);
-                b = matheval(input.substring(ch + functions[func].length), basePos + ch + functions[func].length);
+                a = MathEval(input.substring(0, ch), basePos);
+                b = MathEval(input.substring(ch + functions[func].length), basePos + ch + functions[func].length);
 
                 console.log(`Interpreting ${functions[func]} function (${a}\*${functions[func]}(${b})) : ${basePos + ch}; `)
 
@@ -741,8 +790,8 @@ function matheval(input, basePos = 0)
                 {
                     let str = input.substring(ch + functions[func].length).split("_");
                                             
-                    logBase = matheval(str[0], basePos + ch + functions[func].length);
-                    b = matheval(str[1], basePos + ch + functions[func].length + str[0].length + 1);
+                    logBase = MathEval(str[0], basePos + ch + functions[func].length);
+                    b = MathEval(str[1], basePos + ch + functions[func].length + str[0].length + 1);
 
                     if(StartsWith(logBase, "ERROR:"))
                     {
@@ -772,9 +821,6 @@ function matheval(input, basePos = 0)
                         argsParsed.push(parseFloat(args[i]));
                     }    
 
-                    console.log("Parsing commas from args array " + args + " into " + argsParsed + " with type of " + typeof argsParsed);
-                    console.log(Math.max.apply(this, argsParsed));
-
                     traceback += `Interpreted ${functions[func]} function (${a}\*${functions[func]}(${b})) : ${basePos + ch}; `
                     return a * functionAction[func].apply(this, argsParsed);
                 }
@@ -794,8 +840,8 @@ function matheval(input, basePos = 0)
         {
             if(ContainsAt(input, c[i], ch))
             {
-                a = matheval(input.substring(0, ch), basePos);
-                b = matheval(input.substring(ch + c[i].length), basePos + ch + c[i].length);
+                a = MathEval(input.substring(0, ch), basePos);
+                b = MathEval(input.substring(ch + c[i].length), basePos + ch + c[i].length);
 
                 if(StartsWith(a, "ERROR: Empty"))
                 {
@@ -829,4 +875,73 @@ function matheval(input, basePos = 0)
         traceback += `Parsed value (${value}) from "${input}" : ${basePos}; `
         return value;
     }
+}
+
+function AbilityCheckEmbed(action, mod, adv, col, compact, author)
+{
+    console.log(`Generating embed with traits ${action}, ${mod}, ${adv}, ${col}, ${author}.`)
+    let embed = new Discord.MessageEmbed()
+    .setTitle(`${author.displayName} ${action}`)
+    .setColor(col)
+
+    console.log(`Prepping to roll!`)
+    let results = [];
+    const chooseFunc = adv > 0 ? Math.max : Math.min;
+
+    const rollCount = adv == 0 ? 1 : 2;
+    console.log(rollCount);
+    for(let i = 0; i < rollCount; i++)
+    {
+        console.log(`Rolling a value for the ability check.`)
+        results.unshift(Math.floor(Math.random() * 20) + 1);
+        if(!compact) embed.addField("d20", results[0], true);
+    }
+
+    const finalResult = chooseFunc.apply(this, results);
+
+    embed.setDescription(`Result: ${finalResult} ${mod < 0 ? "-" : "+"} ${Math.abs(mod)} = **${finalResult + mod}**. ${GetComment(finalResult + mod)}`)
+
+    console.log(embed);
+    return embed;
+}
+
+function GetComment(power)
+{
+    let list = []
+
+    const commentsVeryWeak = ["OUCH!", "That was... Let's not talk about that.", "*sigh*", "Frustration mode: engaged!"];
+    const commentsWeak = ["Welp, could've been worse... Maybe...", "That was not your best shot.", "Why did you even try?"];
+    const commentsLowAverage = ["Not the greatest.", "Could have been better.", "Put more effort next time."];
+    const commentsHighAverage = ["Quite decent.", "Not bad, not bad.", "Helpful."];
+    const commentsStrong = ["Hm. Impressive.", "Wow! That's a fine start right there.", "Great!"];
+    const commentsVeryStrong = ["You did WHAT?!", "That was INSANE!", "Amazing job!!!"];
+
+    if(power < 2)
+    {
+        list = commentsVeryWeak;
+    }
+    else if(power < 6)
+    {  
+        list = commentsWeak;
+    }
+    else if(power < 10)
+    {
+        list = commentsLowAverage;
+    }
+    else if(power < 15)
+    {
+        list = commentsHighAverage;
+    }
+    else if(power < 20)
+    {
+        list = commentsStrong;
+    }
+    else
+    {
+        list = commentsVeryStrong;
+    }
+
+    console.log("Comment obtained! " + list[Math.floor(Math.random() * list.length)])
+
+    return(list[Math.floor(Math.random() * list.length)]);
 }
