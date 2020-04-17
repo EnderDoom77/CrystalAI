@@ -5,8 +5,6 @@ const bot = new Discord.Client;
 const io = require('fs');
 const privData = require("./Data/hidden.json")
 
-const MySQL = require('mysql');
-
 const token = privData["token"];
 const link = "https://discordapp.com/api/oauth2/authorize?client_id=699233359578267739&permissions=1546775638&scope=bot"
 let prefix = ':';
@@ -19,10 +17,13 @@ bot.on('ready', () => {
 
 const MESSAGEHELP = new Discord.MessageEmbed()
     .setTitle("Command List for Crystal AI")
+    .setDescription("Here's a list of my skills! Some of these commands have options that can be activated by typing them at the end of a command.")
     .addField("Basic commands", "help => Will show this message \nhelp [command] => Will show how to use a specific command \nhelloworld => Hi! \ninvite => Will show you how to add me to your server! ^w^")
-    .addField("Fun commands", "roll [dice] => Will roll some dice! use help roll for more info.\nmath [operation] => Will solve an arithmetic calculation.\ncheck [action] [options] => Will make an ability check!")
+    .addField("Fun commands", "roll [dice] => Will roll some dice! use help roll for more info.")
+    .addField("Utility commands", "math [operation] => Will solve an arithmetic calculation.\ncheck [action] [options] => Will make an ability check!\nphonetify [expression] => Will send what you say, substituting some expressions for special symbols.")
     .addField("Moderation commands", "cleanse (n) => Will bulk delete n messages")
     .addField("Config commands", "setprefix [prefix] => Will set the prefix \ntoggleprefixcasesensitive => Will toggle whether any case is accepted for the prefix")
+    .addField("Global Options", "-del or --delete : Will delete the triggering message.")
     .setColor("0xAA33FF");
 let cleanseDefault = 1;
 let prefixCaseSensitive = false;
@@ -49,14 +50,94 @@ bot.on('message', msg => {
 
     for(let arg in args)
     {
-        if(args[arg][0] == "\"" && args.length > arg + 1)
+        while(args[arg][0] == "\"" && args.length > arg + 1)
         {
             args[arg] += " " + args.pop(arg + 1);
-            args[arg] = args[arg].substring(1, args[arg].length - 1)
+
+            if(args[arg][args[arg].length - 1] == "\"")
+            {
+                args[arg] = args[arg].substring(1, args[arg].length - 1);
+            }
         }
     }
 
     let finishedOptions = false;
+    let deleteMessage = false;
+    let verbose = 0;
+    let advantage = 0;
+    let mod = 0;
+    let color = "0xFFFF00";
+    let compact = false;
+
+    while(!finishedOptions)
+    {
+        finishedOptions = true;
+
+        if(StartsWith(args[args.length - 1], "-mod")) 
+        {
+            mod = MathEvalStart(args[args.length - 1].substring("-mod".length));
+            if(isNaN(mod)) msg.reply(`The modifier you used (${args[args.length - 1].substring("-mod".length)}) can't be evaluated! ${mod}`).then(msg => (msg.delete(6000)))
+            finishedOptions = false;
+            args.pop();
+        }
+        else if(StartsWith(args[args.length - 1], "-col")) 
+        {
+            color = args[args.length - 1].substring("-col".length);
+            if(StartsWith(color, "#"))
+            {
+                color = color.substring(1);
+            }
+            if(!StartsWith(color, "0x")) 
+            {
+                color = "0x" + color;
+            }
+            if(color.length != 8)
+            {
+                msg.reply(`The color you used (${args[args.length - 1].substring("-col".length)}) doesn't use a correct colour format! Try -col#FFFFFF | -colFFFFFF | -col0xFFFFFF`).then(msg => (msg.delete(6000)))
+            }
+            finishedOptions = false;
+            args.pop();
+        }
+        switch(args[args.length - 1])
+        {
+            case "-adv":
+            case "--advantage":
+                advantage = 1;
+                finishedOptions = false;
+                args.pop();
+                break;
+            case "-disadv":
+            case "--disadvantage":
+                advantage = -1;
+                finishedOptions = false;
+                args.pop();
+                break;
+            case "-c":
+            case "--compact":
+                compact = true;
+                finishedOptions = false;
+                args.pop();
+                break;
+            case "-del":
+            case "--delete":
+                deleteMessage = true;
+                finishedOptions = false;
+                args.pop();
+                break;
+            case "-tb":
+            case "--shorttraceback":
+                verbose = 1;
+                finishedOptions = false;
+                args.pop();
+                break;
+            case "-v":
+            case "--verbose":
+                verbose = 2;
+                finishedOptions = false; 
+                args.pop();
+                break;            
+        }
+    }    
 
     switch(args[0].toLowerCase())
     {
@@ -120,6 +201,21 @@ bot.on('message', msg => {
 
                         msg.channel.send(embedCheck);
                         break;
+                    case 'phonetify':
+                        const embedPhonetify = new Discord.MessageEmbed().setTitle(`${prefix}phonetify [expression] ([options])`)
+                        .setDescription(`This command will swap the expression's shorcuts for the symbol they represent. \nA shortcut is phrased like "${phoneticPrefix}[Abbreviation]${phoneticSuffix}".\nSome abbreviations aren't case-sensitive, shown here with (\\*). Abbreviations are the following.`)
+                        .addField("Plosives", PhoneticCharStringify("ʈ", "ʔ"), true)
+                        .addField("Nasals", PhoneticCharStringify("ɱ", "ɴ"), true)
+                        .addField("Trills & Taps", PhoneticCharStringify("ʙ", "ɽ"), true)
+                        .addField("Fricatives", PhoneticCharStringify("ɸ", "ɦ"), true)
+                        .addField("Laterals & Approximants", PhoneticCharStringify("ɬ", "ʟ"), true)
+                        .addField("Vowels", PhoneticCharStringify("ɨ", "ɒ"), true)
+                        .addField("Diacritics", PhoneticCharStringify("ʰ", "̚" /*o̚*/), true)
+                        .addField("Tones", PhoneticCharStringify("̋" /*ő*/, "̂" /*ô*/), true)
+                        .addField("Other", PhoneticCharStringify("ː", "ˌ"), true);
+
+                        msg.channel.send(embedPhonetify);
+                        break;
                     default:
                         msg.channel.send(`Sorry! I couldn't find command: "${args[1]}" >~<`);
                         break;
@@ -157,71 +253,6 @@ bot.on('message', msg => {
             break;
         case 'check': //:check [SOME ACTION] [OPTIONS] ==> -mod+3 -adv -disadv
             args.shift();
-
-            finishedOptions = false;
-            let advantage = 0;
-            let mod = 0;
-            let color = "0xFFFF00";
-            let compact = false;
-
-            try{
-                while(!finishedOptions)
-                {
-                    finishedOptions = true;
-                    console.log(`Checking config options for ${args}`);
-
-                    if(StartsWith(args[args.length - 1], "-mod")) 
-                    {
-                        mod = MathEvalStart(args[args.length - 1].substring("-mod".length));
-                        if(isNaN(mod)) msg.reply(`The modifier you used (${args[args.length - 1].substring("-mod".length)}) can't be evaluated! ${mod}`).then(msg => (msg.delete(6000)))
-                        finishedOptions = false;
-                        args.pop();
-                    }
-                    else if(StartsWith(args[args.length - 1], "-col")) 
-                    {
-                        color = args[args.length - 1].substring("-col".length);
-                        if(StartsWith(color, "#"))
-                        {
-                            color = color.substring(1);
-                        }
-                        if(!StartsWith(color, "0x")) 
-                        {
-                            color = "0x" + color;
-                        }
-                        if(color.length != 8)
-                        {
-                            msg.reply(`The color you used (${args[args.length - 1].substring("-col".length)}) doesn't use a correct colour format! Try -col#FFFFFF | -colFFFFFF | -col0xFFFFFF`).then(msg => (msg.delete(6000)))
-                        }
-                        finishedOptions = false;
-                        args.pop();
-                    }
-                    switch(args[args.length - 1])
-                    {
-                        case "-adv":
-                        case "--advantage":
-                            advantage = 1;
-                            finishedOptions = false;
-                            args.pop();
-                            break;
-                        case "-disadv":
-                        case "--disadvantage":
-                            advantage = -1;
-                            finishedOptions = false;
-                            args.pop();
-                            break;
-                        case "-c":
-                        case "--compact":
-                            compact = true;
-                            finishedOptions = false;
-                            args.pop();
-                            break;
-                    }
-                }
-            }
-            catch(err)
-            {
-                msg.reply(`An unexpected error has occurred! ${err}`);
-            }
 
             if(args.length < 1)
             {
@@ -264,21 +295,6 @@ bot.on('message', msg => {
         case 'calc':
             args.shift();
 
-            finishedOptions = false;
-            let verbose = false;
-
-            while(!finishedOptions)
-            {
-                finishedOptions = true;
-
-                if(args[args.length - 1] == "-v" || args[args.length - 1] == "--verbose") 
-                {
-                    verbose = true;
-                    finishedOptions = false; 
-                    args.pop();
-                }
-            }
-
             if(args.length < 1)
             {
                 msg.reply("You must include an operation!").then(msg => {msg.delete({timeout: 3000})});
@@ -287,7 +303,21 @@ bot.on('message', msg => {
 
             msg.channel.send(DoMath(ClumpArray(args), verbose));
             break;
+
+        case 'phonetify':
+            args.shift();
+
+            if(args.length < 1)
+            {
+                msg.reply("You must include a message!").then(msg => {msg.delete({timeout: 3000})});
+                break;
+            }
+
+            msg.channel.send(`${msg.author.username}'s query evaluates to: ${Phonetify(ClumpArray(args, " "))}`);
+            break;
     }
+
+    if(deleteMessage) msg.delete();
 })
 
 function TryRoll(input, author)
@@ -426,7 +456,7 @@ function RollDiceEmbed(n, d, mod, author)
     .setTitle(result)
     .setDescription(`${n !== 1 ? n : ""}d${d} ${modifierText} => ${result}`)
     .setColor("0xFF0000")
-    .setFooter(`${author.displayName}`, author.iconURL);
+    .setFooter(`${author != null ? author.displayName : ""}`, author.iconURL);
 
     return embed;
 }
@@ -442,10 +472,17 @@ function RollDiceSilent(n, d)
 
         value += newNum;
         traceback += newNum + "+";
+        if(n > 1 && n <= 21) tb += newNum + "+";
     }
 
     if(traceback[traceback.length - 1] == "+") traceback = traceback.substring(0, traceback.length - 1);
     traceback += n > 1 ? `=${value}]; ` : "]; ";
+    if(tb[tb.length - 1] == "+") tb = tb.substring(0, tb.length - 1);
+    
+    if(n > 21) {tb += "[>21 rolls]";}
+    if(n > 1) tb += ") ";
+    tb += `= ${value}; `;
+
     return value;
 }
 
@@ -498,9 +535,11 @@ function ContainsAt(string, substring, position)
 }
 
 let traceback = "";
-function DoMath(input, includeTraceback = true)
+let tb = "";
+function DoMath(input, includeTraceback = 2)
 {
     traceback = "";
+    tb = "";
     let output = MathEvalStart(input);
     let outputSimp = Math.round(output * 10000) / 10000;
     let embed = new Discord.MessageEmbed();
@@ -508,10 +547,15 @@ function DoMath(input, includeTraceback = true)
     embed.addField(`**${input}**`, isNaN(outputSimp) ? output : outputSimp)
     .setColor(StartsWith(output, "ERROR:") ? "0xFF0055" : "0x00FF55");
 
-    if(includeTraceback)
+    switch(includeTraceback)
     {
-        embed.addField("Traceback", traceback);
+        case 2:
+            embed.addField("Traceback", traceback);
+        case 1:
+            embed.addField("Shortened Traceback", tb);
+            break;
     }
+    
 
     return embed;
 }
@@ -566,6 +610,8 @@ function MathEval(input, basePos = 0)
     const e = Math.E;
     const phi = 1.61803398875;
 
+    let result = 0;
+
     console.log("Math with input " + input);
 
     input = input.toString().trim();
@@ -574,6 +620,7 @@ function MathEval(input, basePos = 0)
     else if(StartsWith(input, "ERROR: "))
     {
         traceback += `Forwarding ${input}; `;
+        tb += `Fwd ${input}; `;
         return input;
     }
     else if(StartsWith(input, "["))
@@ -614,7 +661,8 @@ function MathEval(input, basePos = 0)
                     }
                     
                     input = input.substring(0, ch) + `[${ClumpArray(final, ";")}]` + input.substring(pos + 1);
-                    traceback += `Extracted commas into ${input} at: ${ch + basePos}; `
+                    traceback += `Extracted commas into ${input} at: ${ch + basePos}; `;
+                    tb += `Split args into [${final}]; `;
                 }
                 else
                 {
@@ -627,6 +675,7 @@ function MathEval(input, basePos = 0)
 
                 input = input.substring(0, ch) + a + input.substring(pos + 1);
                 traceback += `Interpreted brackets into "${input}" : ${ch + basePos}; `;
+                tb += `Bracket operation with ${input}; `
                 }
             }
         }
@@ -657,7 +706,9 @@ function MathEval(input, basePos = 0)
             }
 
             traceback += `Interpreted ${(input[ch] == "―") ? "subtraction" : "addition"} (${a}${input[ch]}${b}) : ${basePos + ch}; `;
-            return a + (b * (input[ch] == "―" ? (-1) : (1)));
+            result = a + (b * (input[ch] == "―" ? (-1) : (1)));
+            tb += `${a} ${input[ch]} ${b} = ${result}; `;
+            return result;
         }
     }
 
@@ -682,7 +733,9 @@ function MathEval(input, basePos = 0)
             if(b == 0 && input[ch] == "/") return `ERROR: Attempt to divide by 0 UNDEFINED at position: ${basePos + ch}`
 
             traceback += `Interpreted ${input[ch] == "/" ? "division :" : "multiplication :"} (${a}${"\\"+input[ch]}${b}) : ${basePos + ch}; `;
-            return a * (b ** (input[ch] == "/" ? (-1) : (1)));
+            result = a * (b ** (input[ch] == "/" ? (-1) : (1)));
+            tb += `${a} ${input[ch]} ${b} = ${result}; `;
+            return result;
         }
     }
 
@@ -707,7 +760,9 @@ function MathEval(input, basePos = 0)
             if(a == 0 && b == 0) return `ERROR: Attempt to do 0^0 UNDEFINED at position: ${basePos + ch}`
 
             traceback += `Interpreted exponentiation (${a}^${b}) : ${basePos}; `;
-            return a ** b;
+            result = a ** b;
+            tb += `${a}^${b}=${result}; `
+            return result;
         }
     }
 
@@ -730,7 +785,9 @@ function MathEval(input, basePos = 0)
             }
 
             traceback += `Interpreted remainder (${a} % ${b}) : ${basePos + ch}; `;
-            return a % b;
+            result = a % b;
+            tb += `${a}%${b}=${result}; `
+            return result;
         }
     }
 
@@ -758,7 +815,9 @@ function MathEval(input, basePos = 0)
             }
 
             traceback += `Interpreted dice-rolling (${a}d${b}) : ${basePos + ch} with results: [`
-            return RollDiceSilent(a, b);
+            tb += `rolled ${a}d${b} ${a > 1 ? "(" : ""}`;
+            result = RollDiceSilent(a, b);
+            return result;
         }
     }
         
@@ -824,11 +883,16 @@ function MathEval(input, basePos = 0)
                     }    
 
                     traceback += `Interpreted ${functions[func]} function (${a}\*${functions[func]}(${b})) : ${basePos + ch}; `
-                    return a * functionAction[func].apply(this, argsParsed);
+                    result = a * functionAction[func].apply(this, argsParsed);
+                    tb += `${a}*${functions[func]}(${b}) = ${result};`
+                    return result;
                 }
 
                 traceback += `Interpreted ${functions[func]} function (${a}\*${functions[func]}(${b})) : ${basePos + ch}; `
-                return a * functionAction[func](b) / Math.log10(logBase);
+                
+                result = a * functionAction[func](b) / Math.log10(logBase);
+                tb += `${a}*${functions[func]}${logBase !== 10 ? `${logBase}_` : ""}(${b}) = ${result};`
+                return result;
             }
         }
     }
@@ -859,6 +923,7 @@ function MathEval(input, basePos = 0)
                 }
 
                 traceback += `Interpreted constant (${c[i]}) : ${basePos + ch}; `
+                tb += `Parsed ${c[i]}; `
                 return a * cv[i];
             }
         }
@@ -875,6 +940,7 @@ function MathEval(input, basePos = 0)
     else
     {
         traceback += `Parsed value (${value}) from "${input}" : ${basePos}; `
+        tb += `Parsed ${value}; `
         return value;
     }
 }
@@ -883,7 +949,7 @@ function AbilityCheckEmbed(action, mod, adv, col, compact, author)
 {
     console.log(`Generating embed with traits ${action}, ${mod}, ${adv}, ${col}, ${author}.`)
     let embed = new Discord.MessageEmbed()
-    .setTitle(`${author.displayName} ${action}`)
+    .setTitle(`*${author != null ? author.displayName : "You"}* ${action}`)
     .setColor(col)
 
     console.log(`Prepping to roll!`)
@@ -946,4 +1012,139 @@ function GetComment(power)
     console.log("Comment obtained! " + list[Math.floor(Math.random() * list.length)])
 
     return(list[Math.floor(Math.random() * list.length)]);
+}
+
+const phoneticPrefix = "{";
+const phoneticSuffix = "}";
+
+const phoneticSampleLetter = "x";
+class PhAbbr
+{
+    constructor(symbol, abbr, caseSensitive = true, isDiacritic = false)
+    {
+        let emptyArray = new Array();
+        
+        if(Array.isArray(abbr))
+        {
+            for(let i = 0; i < abbr.length; i++)
+            {
+                emptyArray.push(abbr[i]);
+            }
+        }
+        else emptyArray.push(abbr);
+
+        this.symbol = symbol;
+        this.abbr = emptyArray;
+        this.caseSensitive = caseSensitive;
+        this.isDiacritic = isDiacritic;
+    }
+
+    ToString()
+    {
+        let output = `${this.isDiacritic ? phoneticSampleLetter : ""}${this.symbol}: `;
+
+        for(let i = 0; i < this.abbr.length; i++)
+        {
+            if(i > 0)
+            {
+                output += `, ${i == this.abbr.length - 1 ? "or" : ""} ${this.abbr[i]}`;
+            }
+            else
+            {
+                output += this.abbr[0];
+            }
+        }
+
+        if(!this.caseSensitive) output += " (\\*)";
+
+        return output + ".";
+    }
+}
+
+const phAbbr = [
+    new PhAbbr("ʈ", "rft", false), new PhAbbr("ɖ", "rfd", false), new PhAbbr("ɟ", ["~~j~~", "~j~", "~j", "ptj"], false), new PhAbbr("ɢ", "G"), new PhAbbr("ʔ", ["?", "gstop", "gtstop"], false),
+    new PhAbbr("ɱ", "ldm", false), new PhAbbr("ɳ", "rfn", false), new PhAbbr("ɲ", ["gn", "ny", "nj", "ñ"], false), new PhAbbr("ŋ", "ng", false), new PhAbbr("ɴ", "N"),
+    new PhAbbr("ʙ", "B"), new PhAbbr("ʀ", "R"), new PhAbbr("ⱱ", ["tapv", "flapv"], false), new PhAbbr("ɾ", ["tapr", "flapr"], false), new PhAbbr("ɽ", "rfr", false),
+    new PhAbbr("ɸ", ["phi", "blfp"], false), new PhAbbr("β", ["beta", "blfb", "blv"], false), new PhAbbr("θ", ["theta", "thorn", "th", "dtft"], false), new PhAbbr("ð", ["delta", "eth", "dh", "dtfd"], false), new PhAbbr("ʃ", ["sch", "sh", "pafs"], false), new PhAbbr("ʒ", ["3", "zh", "pafz"], false), new PhAbbr("ʂ", "rfs", false), new PhAbbr("ʐ", "rfz", false), new PhAbbr("ç", ["cedille", "c,", "ptfc"], false), new PhAbbr("ʝ", "ptfj", false), new PhAbbr("ɣ", ["gamma", "vlfg"], false), new PhAbbr("χ", ["chi", "uvfx"], false), new PhAbbr("ʁ", ["/R", "uvfr"]), new PhAbbr("ħ", ["hbar", "phfh"], false), new PhAbbr("ʕ", ["/?", "phf?"], false), new PhAbbr("ɦ", ["hcurly", "hcurl", "gtfh", "gtfv"], false),
+    new PhAbbr("ɬ", ["~~l~~", "~l~", "~l", "allu", "allatu", "allat"], false), new PhAbbr("ɮ", ["allv", "allatv", "allatl3"], false),
+    new PhAbbr("ʋ", ["nu", "ldapp"], false), new PhAbbr("ɹ", ["/r", "alapp"]), new PhAbbr("ɻ", ["rfappr", "rfapp"], false), new PhAbbr("ɰ", ["vlappm", "vlapp"], false),
+    new PhAbbr("ɭ", "rfl", false), new PhAbbr("ʎ", ["/y", "ptlatapp", "ptlat", "ptla"], false), new PhAbbr("ʟ", "L"),
+
+    new PhAbbr("ɨ", ["~~i~~", "~i~", "~i"]), new PhAbbr("ʉ", ["~~u~~", "~u~", "~u"]), new PhAbbr("ɯ", ["/m", "ue"]), new PhAbbr("ɪ", "i", "$i", false), new PhAbbr("ʏ", "$y", false), new PhAbbr("ʊ", "$u"), new PhAbbr("ø", ["o/", "/o"], false), new PhAbbr("ɘ", "/e"), new PhAbbr("ɵ", ["~~o~~", "~o~", "~o"]), new PhAbbr("ɤ", "eo"), new PhAbbr("ə", ["schwa", "shwa"]), new PhAbbr("ɛ", ["$e", "epsilon"], false), new PhAbbr("œ", "oe"), new PhAbbr("ɜ", ["$/e", "/$e"], false), new PhAbbr("ɞ", "<3"), new PhAbbr("ʌ", "$A"), new PhAbbr("ɔ", "/c", false), new PhAbbr("æ", "ae", false), new PhAbbr("ɐ", "/a"), new PhAbbr("ɶ", "OE"), new PhAbbr("ɑ", "$a"), new PhAbbr("ɒ", ["$/a", "/$a"]),
+
+    new PhAbbr("ʰ", ["^h", "aspirated"], true, true), new PhAbbr("̥", "voiceless", true, true), new PhAbbr("̬", "voiced", true, true), new PhAbbr("̩", "syllabic", true, true), new PhAbbr("˞", ["rhotic", "rhoticity"], true, true), new PhAbbr("̃", ["nasal", "nasalized", "nasalised"], true, true), new PhAbbr("̚", ["norelease", "norel"], true, true),
+    new PhAbbr("̋", ["#x´", "#xhigh"], true, true), new PhAbbr("́", ["#´", "#high", "#acute"], true, true), new PhAbbr("̄", ["#-", "#mid", "#macron"], true, true), new PhAbbr("̀", ["#\\`", "#low", "#grave"], true, true), new PhAbbr("̏", ["#x\\`", "#xlow"], true, true), new PhAbbr("̌", "#rising", true, true), new PhAbbr("̂", "#falling", true, true),
+    new PhAbbr("ː", ":"), new PhAbbr("ˑ", ";"), new PhAbbr("ˈ", ["'", "stress"]), new PhAbbr("ˌ", "2stress"), new PhAbbr("̆", "short", true, true)
+];
+
+function GetPhoneticChar(str)
+{
+    for(let ab of phAbbr)
+    {
+        for(let s of ab.abbr)
+        {
+            if(s === str || (!ab.caseSensitive && s.toLowerCase() === str.toLowerCase()))
+            {
+                return ab.symbol;
+            }
+        }
+    }
+
+    return "[?]"
+}
+
+function Phonetify(input)
+{
+    let pos = 0;
+
+    for(let i = 0; i < input.length; i++)
+    {
+        if(input[i] == phoneticPrefix)
+        {
+            pos = i;
+        }
+        else if(input[i] == phoneticSuffix)
+        {
+            input = input.substring(0, pos) + GetPhoneticChar(input.substring(pos + 1, i)) + input.substring(i + 1, input.length);
+        }
+    }
+
+    return input;
+}
+
+function PhoneticStringify(start, end, separator)
+{
+    output = "";
+
+    for(let i = start; i < end; i++)
+    {
+        output += phAbbr.ToString() + separator;
+    }
+
+    return output.substring(0, output.length - separator.length);
+}
+
+function PhoneticCharStringify(startChar, endChar, separator = "\n")
+{
+    output = "";
+    found = false;
+
+    for(let i = 0; i < phAbbr.length; i++)
+    {
+        if(!found && phAbbr[i].symbol == startChar)
+        {
+            found = true;
+        }
+
+        if(found)
+        {
+            output += phAbbr[i].ToString() + separator;
+            if(phAbbr[i].symbol == endChar)
+            {
+                return output.substring(0, output.length - separator.length)
+            }
+        }
+    }
+
+    return "No matches have been found for your query :(";
 }
